@@ -1,0 +1,12 @@
+{
+  "12345": {
+    "points": 3,
+    "clicks": 1,
+    "task_progress": {
+      "1": 1
+    },
+    "last_reset_time": "2025-05-23 06:36:34.177100",
+    "last_bonus_date": "2025-05-23",
+    "ref": null
+  }
+}
