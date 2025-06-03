@@ -1,9 +1,11 @@
 from flask import Flask, redirect, request, jsonify
+from flask_cors import CORS  # ✅ NEW LINE
 import json
 import datetime
 import random
 
 app = Flask(__name__)
+CORS(app)  # ✅ NEW LINE
 
 def load_users():
     try:
@@ -200,4 +202,3 @@ def referral():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
-
