@@ -1,11 +1,21 @@
+
 from flask import Flask, redirect, request, jsonify
-from flask_cors import CORS  # ✅ NEW LINE
+from flask_cors import CORS
 import json
 import datetime
 import random
+import requests
 
 app = Flask(__name__)
-CORS(app)  # ✅ NEW LINE
+CORS(app)
+
+BOT_TOKEN = "7572938961:AAGscfeGVd3sMqwPonvAaqaWE2n2xukT8Hc"
+ADMIN_ID = "1081808918"
+
+def send_telegram_message(text):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    data = {"chat_id": ADMIN_ID, "text": text}
+    requests.post(url, json=data)
 
 def load_users():
     try:
@@ -32,45 +42,6 @@ def time_diff_in_hours(past):
 def home():
     return "✅ Airdrop Backend Running!"
 
-@app.route("/track")
-def track():
-    uid = request.args.get("uid")
-    ref = request.args.get("ref")
-    users = load_users()
-
-    if uid not in users:
-        users[uid] = {
-            "points": 0,
-            "last_reset": now_time().strftime("%Y-%m-%d %H:%M:%S"),
-            "tasks_done": [],
-            "ref": ref if ref else "",
-            "ad_clicks": 0,
-            "ref_bonus_given": False
-        }
-
-    user = users[uid]
-
-    if time_diff_in_hours(user["last_reset"]) >= 6:
-        user["last_reset"] = now_time().strftime("%Y-%m-%d %H:%M:%S")
-        user["tasks_done"] = []
-
-    if len(user["tasks_done"]) < 30:
-        task_id = len(user["tasks_done"]) + 1
-        user["tasks_done"].append(task_id)
-        user["points"] += 2
-        user["ad_clicks"] += 1
-
-        # Referral bonus
-        if user["ref"] and not user["ref_bonus_given"] and user["ad_clicks"] >= 1:
-            referrer = users.get(user["ref"])
-            if referrer:
-                referrer["points"] += 5
-                user["ref_bonus_given"] = True
-
-    users[uid] = user
-    save_users(users)
-    return "✅ Task recorded!"
-
 @app.route("/points")
 def points():
     uid = request.args.get("uid")
@@ -81,34 +52,6 @@ def points():
     if not user:
         return "User not found"
     return f"{user['points']}"
-
-@app.route("/bonus")
-def bonus():
-    uid = request.args.get("uid")
-    if not uid:
-        return "❌ Missing UID"
-
-    users = load_users()
-    user = users.get(uid, {
-        "points": 0,
-        "clicks": 0,
-        "task_progress": {},
-        "last_reset_time": str(now_time()),
-        "last_bonus_date": "",
-        "ref": None
-    })
-
-    today = now_time().strftime("%Y-%m-%d")
-    if user["last_bonus_date"] == today:
-        return "🎁 Bonus already claimed today!"
-
-    bonus = random.randint(1, 2)
-    user["points"] += bonus
-    user["last_bonus_date"] = today
-
-    users[uid] = user
-    save_users(users)
-    return f"🎁 You received {bonus} bonus points today!"
 
 @app.route("/withdraw", methods=["POST"])
 def withdraw():
@@ -144,6 +87,11 @@ def withdraw():
 
     save_users(users)
     save_withdraws(withdraws)
+
+    # Send Telegram message
+    message = f"🚨 New Withdraw Request\n👤 User: {uid}\n💵 Amount: ${amount}\n🏦 Binance ID: {address}"
+    send_telegram_message(message)
+
     return {"status": "success"}
 
 @app.route("/admin/withdraws")
@@ -164,41 +112,6 @@ def load_withdraws():
 def save_withdraws(data):
     with open("withdraws.json", "w") as f:
         json.dump(data, f, indent=2)
-
-@app.route("/referral", methods=["POST"])
-def referral():
-    data = request.get_json()
-    uid = data.get("uid")
-    referrer_code = data.get("referrer")
-
-    if not uid or not referrer_code:
-        return jsonify({"error": "Missing data"}), 400
-
-    try:
-        with open("referrals.json", "r") as f:
-            referrals = json.load(f)
-    except:
-        referrals = {}
-
-    if uid in referrals:
-        return jsonify({"message": "Already referred"}), 200
-
-    referrals[uid] = referrer_code
-    with open("referrals.json", "w") as f:
-        json.dump(referrals, f)
-
-    try:
-        with open("points.json", "r") as f:
-            points = json.load(f)
-    except:
-        points = {}
-
-    points[referrer_code] = points.get(referrer_code, 0) + 5
-
-    with open("points.json", "w") as f:
-        json.dump(points, f)
-
-    return jsonify({"message": "Referral recorded & rewarded"}), 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
